@@ -1,34 +1,42 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+Yo have you ever been writing server code and you were like "Man this is all in Javascript anyway,
+why can't I just execute these functions on the client and have it execute on the server, but give me the return value in a promise
+exactly like normal?
 
-## Getting Started
+Well, that mess of a run-on sentence is what this small library hopes to allow you to do.
 
-First, run the development server:
+## Example
 
-```bash
-npm run dev
-# or
-yarn dev
+You've got a server functionality, `checkZip`, which is a very easy call that you want to make sure happens on the server.
+The call needs to refer to a huge list of zip codes, so  you can't ship it to the client.
+
+```
+export const checkZip = gapless('checkZip', zip => {
+  return hugeListOfzips?.includes(zip);
+});
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+That's it. Place that code anywhere in your NextJS project and use it in client code. That's all you have to do.
+```
+import { checkZip } from '../lib';
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+// A frontend component
+const ZipChecker = () => {
+  ...JSX
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+  const handleSubmit = async () => {
+    const validZip = await checkZip(zipcode);
+  };
+  ...
+};
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+Exactly like absolutely normal React code. It's beautiful.
 
-## Learn More
 
-To learn more about Next.js, take a look at the following resources:
+## How does it work?
+When the `gapless` function runs on your desired code, it registers it with the server, and returns a functor.
+If that functor was run on the server, not much of interest would happen, it would just call the function you expect, really.
+If that returned functor is run in client code, then we set up a WebSocket connection and inform the server that we want to run
+a function call. The server then runs it, and sends a result message back to the client over the socket.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+Meanwhile, the actual return from running that functor gave you a promise. That promise will be resolved by the websocket
+handlers, which can resolve it with the value the server eventually gets back to you with.

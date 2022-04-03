@@ -1,13 +1,16 @@
 import { Server, Socket } from "socket.io";
 import config from "../config";
 import { GaplessFunctionRequest, GaplessFunctionResult } from "./gapless";
-import { GaplessFunctionInfo } from './gapless.d';
 
 export let serverIO: Server;
 
+export type FunctionRequestHandler = (req: GaplessFunctionRequest) => void;
+export type SendResultFunction = (<T>(res: GaplessFunctionResult<T>) => void);
+export type GaplessCallbackSignature<T> = (sendResult: SendResultFunction) => FunctionRequestHandler;
+
+
 // Use a higher order function to inject the `send` function into the handler
-const initServer =
-  (gaplessCallback: <T>(send: (GaplessFunctionResult<T>)) => (req: GaplessFunctionRequest) => void) => {
+const initServer = <T>(gaplessCallback: GaplessCallbackSignature<T>) => {
   try {
     console.log('basic server check');
     serverIO = new Server({ cors: {
@@ -23,15 +26,15 @@ const initServer =
       connectEverything(socket);
 
       // The meat and potatoes, the callback to handle gapless stuff happens in here.
-      const ourSend = (res: GaplessFunctionRequest) => {
+      const sendResult: SendResultFunction = res => {
         console.log('ourSend', res);
         socket.emit('result', res);
       };
 
+      // When they make a call, this is the real handler.
       socket.on('call', (res: GaplessFunctionRequest) => {
-        // TODO: Big any here that ruins the rest of the possible type checking
         console.log('call received on server', res);
-        gaplessCallback(ourSend as any)(res);
+        gaplessCallback(sendResult)(res);
       });
     });
 

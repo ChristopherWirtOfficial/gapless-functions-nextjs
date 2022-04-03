@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Socket } from 'socket.io';
 import uuid from '../uuid';
 import initClientSockets, { callRemoteFunction, clientIO } from './clientSockets';
-import initServer from './serverSockets';
+import initServer, { GaplessCallbackSignature, SendResultFunction } from './serverSockets';
 
 // NOTE: Anything that's actually _IN THE IMPORTED FILE_ won't be treeshaken or anything like that, it's coming along for the ride.
 // that's almost certainly fine in general, since the function definitions need to come along anyway, but stuff like a HUGE JSON block
@@ -18,7 +18,7 @@ export type GaplessFunctionResult<T> = GaplessFunctionInfo & {
 };
 
 export type GaplessFunctionRequest = GaplessFunctionInfo & {
-  args: any[];
+  args: any[]; // TODO: any[], can we do better?
 };
 
 export type GaplessFunctionError = GaplessFunctionInfo & {
@@ -32,11 +32,10 @@ const IS_CLIENT = !IS_SERVER;
 
 const gaplessFunctions = new Map<string, (...args: any[]) => Promise<any>>();
 
-console.log('WHO AM IIiiiiii');
 if(IS_SERVER) {
-  // Make a real type for the send function's type (and maybe more of the signature) and replace that instead of using the typeof thing
-  const gaplessCb = (emit) => async (req: GaplessFunctionRequest) => {
-    const { gaplessKey, executionID, args } = req;
+  // Idk if we can improve this `any`, since we have to set this up independently of the gapless functions being registered
+  const gaplessCb: GaplessCallbackSignature<any> = (sendResult) => async functionRequest => {
+    const { gaplessKey, executionID, args } = functionRequest;
     const func = gaplessFunctions.get(gaplessKey);
 
     if(!func) {
@@ -44,21 +43,22 @@ if(IS_SERVER) {
     }
     console.log('emiiting', gaplessKey, executionID, args);
     const result = await func(...args);
-    await emit({
+    await sendResult({
       gaplessKey,
       executionID,
       result,
     });
   };
 
-  initServer(gaplessCb as any); // TODO obv
+  initServer(gaplessCb);
 }
 
 if(IS_CLIENT) {
   initClientSockets();
 }
 
-
+// As long as every bit of client-server communication info is "computed" or provided deterministically,
+//   then the client and server don't have to agree on anything before getting started. This is the real key here.
 const gapless = <ArgType extends unknown[], ReturnType>(gaplessKey: string, functor: (...args: ArgType) => ReturnType) => {
   if (IS_CLIENT) {
 
@@ -78,16 +78,9 @@ const gapless = <ArgType extends unknown[], ReturnType>(gaplessKey: string, func
       return new Promise((resolve, reject) => {
         // Create a function reference that, when called, 
         const checkResultsUntilFindingOurs = (result: GaplessFunctionResult<ArgType>) => {
-          console.log('here?', {
-            result,
-            ours: {
-              gaplessKey,
-              executionID,
-            }
-          });
           if (result.gaplessKey === gaplessKey && result.executionID === executionID) {
             // We found our result, so resolve the promise with it
-            resolve(result);
+            resolve(result.result);
             clientIO.off('result', checkResultsUntilFindingOurs);
             console.log('found result', result, timeout);
             clearTimeout(timeout);
@@ -109,9 +102,10 @@ const gapless = <ArgType extends unknown[], ReturnType>(gaplessKey: string, func
     };
   }
 
+  // I'll be honest, I don't feel confident explaining exactly why this gets called on the server, but it's important to know
+  //   that the exact same `gapless` call MUST run on the server. I think NextJS runs it because it has to do even the most basic SSR
+  //   before shipping off the page, so any imports will be resolved on the server, and then effectively resolved again on the client.
   if (IS_SERVER) {
-    console.log('The most imporant console.log of the night');
-    console.log('gaplessKey', gaplessKey, 'functor', functor);
     gaplessFunctions.set(gaplessKey, functor as any);
   };
 
