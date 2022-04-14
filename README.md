@@ -16,7 +16,7 @@ export const checkZip = gapless('checkZip', zip => {
 ```
 
 That's it. Place that code anywhere in your NextJS project and use it in client code. That's all you have to do.
-```
+```javascript
 import { checkZip } from '../lib';
 
 // A frontend component
@@ -28,6 +28,7 @@ const ZipChecker = () => {
   };
   ...
 };
+```
 
 Exactly like absolutely normal React code. It's beautiful.
 
