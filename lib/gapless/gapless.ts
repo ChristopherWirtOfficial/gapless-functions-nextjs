@@ -1,3 +1,9 @@
+/*
+ Gapless - https://github.com/ChristopherWirtOfficial/gapless-functions-nextjs
+
+ Something I've been noodling with in my free-time and figured I could use/show-off here.
+*/
+
 import { useMemo, useState } from 'react';
 import { Socket } from 'socket.io';
 import uuid from '../uuid';
@@ -32,13 +38,13 @@ const IS_CLIENT = !IS_SERVER;
 
 const gaplessFunctions = new Map<string, (...args: any[]) => Promise<any>>();
 
-if(IS_SERVER) {
+if (IS_SERVER) {
   // Idk if we can improve this `any`, since we have to set this up independently of the gapless functions being registered
   const gaplessCb: GaplessCallbackSignature<any> = (sendResult) => async functionRequest => {
     const { gaplessKey, executionID, args } = functionRequest;
     const func = gaplessFunctions.get(gaplessKey);
 
-    if(!func) {
+    if (!func) {
       throw new Error(`No function with key ${gaplessKey}`);
     }
     console.log('emiiting', gaplessKey, executionID, args);
@@ -53,17 +59,17 @@ if(IS_SERVER) {
   initServer(gaplessCb);
 }
 
-if(IS_CLIENT) {
+if (IS_CLIENT) {
   initClientSockets();
 }
 
 // As long as every bit of client-server communication info is "computed" or provided deterministically,
 //   then the client and server don't have to agree on anything before getting started. This is the real key here.
-const gapless = <ArgType extends unknown[], ReturnType>(gaplessKey: string, functor: (...args: ArgType) => ReturnType) => {
+const gapless = <ArgType extends unknown[], ReturnType>(gaplessKey: string, functor: (...args: ArgType) => ReturnType): (...args: ArgType) => Promise<ReturnType> => {
   if (IS_CLIENT) {
 
-      // From the client's perspective, this is the actual checkZip function that they're calling.
-      // It returns a promise that should resolve into the result of the functor on the server.
+    // From the client's perspective, this is the actual checkZip function that they're calling.
+    // It returns a promise that should resolve into the result of the functor on the server.
     return async (...args: ArgType) => {
       const executionID = uuid();
 
@@ -75,9 +81,9 @@ const gapless = <ArgType extends unknown[], ReturnType>(gaplessKey: string, func
         args,
       });
 
-      return new Promise((resolve, reject) => {
+      return new Promise<ReturnType>((resolve, reject) => {
         // Create a function reference that, when called, 
-        const checkResultsUntilFindingOurs = (result: GaplessFunctionResult<ArgType>) => {
+        const checkResultsUntilFindingOurs = (result: GaplessFunctionResult<ReturnType>) => {
           if (result.gaplessKey === gaplessKey && result.executionID === executionID) {
             // We found our result, so resolve the promise with it
             resolve(result.result);
@@ -111,6 +117,10 @@ const gapless = <ArgType extends unknown[], ReturnType>(gaplessKey: string, func
 
   return async (...args: ArgType) => {
     console.error('DEFAULT FUNCTOR CALLED', args, gaplessKey);
+
+    return new Promise<ReturnType>((resolve, reject) => {
+      reject(new Error('Not implemented'));
+    });
   }
 };
 
