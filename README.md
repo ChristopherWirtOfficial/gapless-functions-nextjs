@@ -9,14 +9,14 @@ Well, that mess of a run-on sentence is what this small library hopes to allow y
 You've got a server functionality, `checkZip`, which is a very easy call that you want to make sure happens on the server.
 The call needs to refer to a huge list of zip codes, so  you can't ship it to the client.
 
-```
+```javascript
 export const checkZip = gapless('checkZip', zip => {
   return hugeListOfzips?.includes(zip);
 });
 ```
 
 That's it. Place that code anywhere in your NextJS project and use it in client code. That's all you have to do.
-```
+```javascript
 import { checkZip } from '../lib';
 
 // A frontend component
@@ -28,6 +28,7 @@ const ZipChecker = () => {
   };
   ...
 };
+```
 
 Exactly like absolutely normal React code. It's beautiful.
 
